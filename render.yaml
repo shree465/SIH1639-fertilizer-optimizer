@@ -1,0 +1,50 @@
+# Render Blueprint for SIH1639 Fertilizer Optimizer
+# Docs: https://render.com/docs/blueprint-spec
+#
+# Secrets are intentionally NOT stored here. Every envVar marked `sync: false`
+# must be filled in manually in the Render dashboard before/after first deploy.
+
+services:
+  - type: web
+    name: sih1639-api
+    runtime: python
+    plan: free
+    region: singapore          # closest Render region to India; change if you prefer another
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      # --- Runtime pin (required by the execution manual) ---
+      - key: PYTHON_VERSION
+        value: 3.11.9
+
+      # --- Non-secret application settings (see backend/app/core/config.py) ---
+      - key: APP_ENV
+        value: production
+      - key: WEATHER_CACHE_TTL_SECONDS
+        value: 1800
+      - key: JWT_ALGORITHM
+        value: HS256
+      - key: JWT_EXPIRY_MINUTES
+        value: 1440
+      - key: DEMO_MODE
+        value: true
+      - key: USE_CACHED_WEATHER
+        value: false
+
+      # --- Generated secret (Render creates a random value on first deploy) ---
+      - key: JWT_SECRET
+        generateValue: true
+
+      # --- Must be set manually in the Render dashboard ---
+      # CORS_ORIGINS: comma-separated list, e.g. the deployed Vercel frontend origin
+      - key: CORS_ORIGINS
+        sync: false
+      # DATABASE_URL: Postgres connection string (psycopg v3 driver)
+      - key: DATABASE_URL
+        sync: false
+      # OPENWEATHER_API_KEY: OpenWeather API key
+      - key: OPENWEATHER_API_KEY
+        sync: false
