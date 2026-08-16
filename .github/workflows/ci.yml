@@ -1,0 +1,132 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend (lint + tests)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          # Matches PYTHON_VERSION in render.yaml so CI tests what we deploy.
+          python-version: "3.11.9"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Lint (ruff)
+        run: ruff check app tests
+
+      - name: Run tests
+        run: pytest tests/ -v
+
+      - name: Validate nutrient data layer
+        # Guards the Phase 0 provenance rules: valid JSON, no fabricated
+        # soil-test multiplier, and the R2a phosphate guard still enforced
+        # while that research item is unresolved.
+        run: |
+          python - <<'PY'
+          import json, pathlib, sys
+
+          data = json.loads(pathlib.Path("data/icar_tables.json").read_text(encoding="utf-8"))
+          failures = []
+
+          entries = {e["id"]: e for e in data["entries"]}
+          guards = {g["id"]: g for g in data.get("engine_guards", [])}
+          research = {r["id"]: r for r in data.get("outstanding_research", [])}
+
+          # Every low/medium/high multiplier must still be null (nothing fabricated).
+          def walk(node, path="$"):
+              if isinstance(node, dict):
+                  for key, value in node.items():
+                      if key in {"low", "medium", "high"} and value is not None:
+                          failures.append(f"fabricated soil-test multiplier at {path}.{key} = {value!r}")
+                      walk(value, f"{path}.{key}")
+              elif isinstance(node, list):
+                  for i, value in enumerate(node):
+                      walk(value, f"{path}[{i}]")
+
+          walk(data)
+
+          # The STCR SP basis must stay unresolved until someone cites it.
+          stcr = entries["rice-mh-stcr-transplanted-rahuri"]["soil_test_adjustment"]
+          sp_unit = stcr["variables"]["SP"]["unit"]
+          r2a = research.get("R2a", {})
+          if sp_unit.get("value") is not None and r2a.get("status") != "RESOLVED":
+              failures.append("SP unit was filled in while R2a is still PENDING")
+
+          # A PENDING research item must keep its guard wired up.
+          for item in research.values():
+              guard_id = item.get("enforced_by")
+              if guard_id and guard_id not in guards:
+                  failures.append(f"{item['id']}.enforced_by -> unknown guard {guard_id!r}")
+
+          # Published equations must not drift.
+          expected = [
+              "FN      = 5.20 T – 0.34 SN",
+              "FP2O5  = 9.40 T – 13.66 SP",
+              "FK2O   = 2.73 T – 0.16 SK",
+          ]
+          if stcr["equations_verbatim"] != expected:
+              failures.append("verbatim STCR equations were altered")
+
+          # Every entry must remain traceable to a registered source.
+          for entry in data["entries"]:
+              if entry["source_ref"] not in data["sources"]:
+                  failures.append(f"{entry['id']} has a dangling source_ref")
+
+          if failures:
+              print("Data layer validation FAILED:")
+              for f in failures:
+                  print(f"  - {f}")
+              sys.exit(1)
+          print(f"Data layer OK: {len(entries)} entries, {len(guards)} guard(s), "
+                f"{len(research)} research item(s).")
+          PY
+
+  frontend:
+    name: Frontend (lint + build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
