@@ -115,6 +115,14 @@ export const getHealth = (opts) => request('/health', opts)
 export const postRecommend = (payload, opts) =>
   request('/recommend', { ...opts, method: 'POST', body: payload })
 
+/** POST /imbalance — NPK ratio comparison: current vs recommended. */
+export const postImbalance = (payload, opts) =>
+  request('/imbalance', { ...opts, method: 'POST', body: payload })
+
+/** POST /economics — fertilizer cost comparison. */
+export const postEconomics = (payload, opts) =>
+  request('/economics', { ...opts, method: 'POST', body: payload })
+
 /** GET /soil-lookup/{cardId} — Soil Health Card lookup. */
 export const getSoilLookup = (cardId, opts) =>
   request(`/soil-lookup/${encodeURIComponent(cardId)}`, opts)
@@ -140,6 +148,8 @@ const api = {
   request,
   getHealth,
   postRecommend,
+  postImbalance,
+  postEconomics,
   getSoilLookup,
   getWeather,
   postSchemesMatch,

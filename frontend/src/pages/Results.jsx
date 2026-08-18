@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
-import { ApiError, postRecommend } from '../api/client'
+import { ApiError, postRecommend, postImbalance, postEconomics, postSchemesMatch } from '../api/client'
 import {
   ActionBar,
   Banner,
@@ -12,6 +12,7 @@ import {
 } from '../components/ui'
 import { useSession } from '../state/sessionStore'
 import { describeSubmittedPlot, toBackendPlot } from '../lib/units'
+import { useTextToSpeech } from '../lib/useVoice'
 
 const PRODUCT_ORDER = ['dap', 'urea', 'mop']
 const PRACTICE_KEY = { urea: 'urea_bags', dap: 'dap_bags', mop: 'mop_bags' }
@@ -159,6 +160,12 @@ function SuccessView({ data, session, navigate, onRetry }) {
   const { plot, practice } = session
   const hasBaseline = Object.values(PRACTICE_KEY).some((k) => practice[k] !== '')
 
+  // TTS
+  const { speak, speaking, supported: ttsSupported } = useTextToSpeech()
+  const recommendationText = ordered
+    .map((d) => `${d.product_name}: ${fmt(d.kg, 1)} kg, ${d.bags} bags`)
+    .join('. ')
+
   return (
     <Screen
       step={4}
@@ -217,6 +224,21 @@ function SuccessView({ data, session, navigate, onRetry }) {
               figure is given. A number has deliberately <strong>not</strong> been guessed.
             </p>
           </div>
+        ) : null}
+
+        {/* TTS button */}
+        {ttsSupported && ordered.length > 0 ? (
+          <button
+            type="button"
+            className="mt-3 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 transition"
+            onClick={() => speak(
+              `Your fertilizer recommendation: ${recommendationText}`,
+              'en-IN',
+            )}
+            disabled={speaking}
+          >
+            {speaking ? '🔊 Speaking…' : '🔊 Read recommendation aloud'}
+          </button>
         ) : null}
       </Card>
 
@@ -297,6 +319,16 @@ function SuccessView({ data, session, navigate, onRetry }) {
         </Card>
       ) : null}
 
+      {/* Phase 3: Imbalance dial */}
+      {hasBaseline ? (
+        <ImbalanceSection practice={practice} doses={doses} />
+      ) : null}
+
+      {/* Phase 3: Economics */}
+      {hasBaseline ? (
+        <EconomicsSection practice={practice} doses={doses} />
+      ) : null}
+
       {/* C. NPK information. */}
       <Card title="Nutrients">
         <dl className="divide-y divide-slate-100">
@@ -330,6 +362,9 @@ function SuccessView({ data, session, navigate, onRetry }) {
           />
         </dl>
       </Card>
+
+      {/* Phase 3: Schemes */}
+      <SchemesSection session={session} />
 
       {infos.length > 0 ? (
         <Card title="Notes from the engine">
@@ -366,6 +401,17 @@ function SuccessView({ data, session, navigate, onRetry }) {
         </Card>
       ) : null}
 
+      {/* Phase 3: LCC navigation */}
+      <Card title="In-season tools">
+        <button
+          type="button"
+          className="w-full rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-left text-sm font-medium text-green-900 hover:bg-green-100 transition"
+          onClick={() => navigate('/lcc')}
+        >
+          🌿 Leaf Colour Chart — check if nitrogen top-dressing is needed
+        </button>
+      </Card>
+
       <ActionBar>
         <Button variant="secondary" onClick={() => navigate('/practice')}>
           Back
@@ -373,5 +419,263 @@ function SuccessView({ data, session, navigate, onRetry }) {
         <Button onClick={onRetry}>Recalculate</Button>
       </ActionBar>
     </Screen>
+  )
+}
+
+/* ------------------------------------------------------------ Imbalance */
+
+function ImbalanceSection({ practice, doses }) {
+  const [data, setData] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+
+  useEffect(() => {
+    const currentBags = {
+      urea_bags: practice.urea_bags === '' ? 0 : Number(practice.urea_bags),
+      dap_bags: practice.dap_bags === '' ? 0 : Number(practice.dap_bags),
+      mop_bags: practice.mop_bags === '' ? 0 : Number(practice.mop_bags),
+    }
+    const recDose = (key) => {
+      const d = doses.find((x) => x.product_key === key)
+      return d ? d.bags : 0
+    }
+    const recommendedBags = {
+      urea_bags: recDose('urea'),
+      dap_bags: recDose('dap'),
+      mop_bags: recDose('mop'),
+    }
+
+    setLoading(true)
+    postImbalance({ current: currentBags, recommended: recommendedBags })
+      .then((res) => { setData(res); setLoading(false) })
+      .catch((err) => { setError(err.message); setLoading(false) })
+  }, [practice, doses])
+
+  if (loading) return null
+  if (error) {
+    return (
+      <Banner tone="warning" title="Imbalance data unavailable">
+        {error}
+      </Banner>
+    )
+  }
+  if (!data) return null
+
+  const surplus = data.nitrogen_surplus_kg
+
+  return (
+    <Card title="NPK Imbalance">
+      {/* Nitrogen surplus — the headline number */}
+      <div className="mb-4 rounded-lg bg-gradient-to-r from-amber-50 to-amber-100 p-4 text-center">
+        <p className="text-xs font-medium uppercase tracking-wide text-amber-700">
+          {surplus > 0 ? 'Nitrogen surplus (over-applied)' : surplus < 0 ? 'Additional nitrogen with plan' : 'Nitrogen balanced'}
+        </p>
+        <p className={`text-3xl font-bold tabular-nums ${surplus > 0 ? 'text-amber-800' : surplus < 0 ? 'text-green-700' : 'text-slate-700'}`}>
+          {surplus > 0 ? `+${fmt(surplus, 1)}` : fmt(surplus, 1)} kg
+        </p>
+        {surplus > 0 ? (
+          <p className="mt-1 text-xs text-amber-700">
+            You are currently applying {fmt(surplus, 1)} kg more nitrogen than recommended
+          </p>
+        ) : null}
+      </div>
+
+      {/* Ratio comparison bars */}
+      <div className="space-y-3">
+        <RatioBar label="Your current" ratio={data.current_ratio} message={data.current_ratio_message} color="amber" />
+        <RatioBar label="Recommended" ratio={data.recommended_ratio} message={data.recommended_ratio_message} color="green" />
+        <RatioBar label="Target" ratio={data.target_ratio} color="sky" />
+      </div>
+
+      {/* Totals */}
+      <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
+        <div>
+          <p className="font-medium text-slate-500">Current totals</p>
+          <p>N: {fmt(data.current_totals.n_kg)} kg</p>
+          <p>P₂O₅: {fmt(data.current_totals.p2o5_kg)} kg</p>
+          <p>K₂O: {fmt(data.current_totals.k2o_kg)} kg</p>
+        </div>
+        <div>
+          <p className="font-medium text-slate-500">Recommended totals</p>
+          <p>N: {fmt(data.recommended_totals.n_kg)} kg</p>
+          <p>P₂O₅: {fmt(data.recommended_totals.p2o5_kg)} kg</p>
+          <p>K₂O: {fmt(data.recommended_totals.k2o_kg)} kg</p>
+        </div>
+      </div>
+    </Card>
+  )
+}
+
+function RatioBar({ label, ratio, message, color = 'slate' }) {
+  if (!ratio && message) {
+    return (
+      <div>
+        <p className="text-xs font-medium text-slate-600">{label}</p>
+        <p className="text-xs text-amber-700 italic">{message}</p>
+      </div>
+    )
+  }
+  if (!ratio) return null
+
+  const total = ratio.n + ratio.p2o5 + ratio.k2o
+  if (total === 0) return null
+
+  const pcts = {
+    n: (ratio.n / total) * 100,
+    p: (ratio.p2o5 / total) * 100,
+    k: (ratio.k2o / total) * 100,
+  }
+
+  const colors = {
+    amber: ['bg-amber-500', 'bg-amber-300', 'bg-amber-200'],
+    green: ['bg-green-600', 'bg-green-400', 'bg-green-300'],
+    sky: ['bg-sky-500', 'bg-sky-300', 'bg-sky-200'],
+    slate: ['bg-slate-500', 'bg-slate-400', 'bg-slate-300'],
+  }
+  const c = colors[color] || colors.slate
+
+  return (
+    <div>
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-medium text-slate-600">{label}</p>
+        <p className="text-xs font-mono text-slate-500">{ratio.label}</p>
+      </div>
+      <div className="mt-1 flex h-4 overflow-hidden rounded-full">
+        <div className={`${c[0]} transition-all`} style={{ width: `${pcts.n}%` }} title={`N: ${ratio.n}`} />
+        <div className={`${c[1]} transition-all`} style={{ width: `${pcts.p}%` }} title={`P₂O₅: ${ratio.p2o5}`} />
+        <div className={`${c[2]} transition-all`} style={{ width: `${pcts.k}%` }} title={`K₂O: ${ratio.k2o}`} />
+      </div>
+      <div className="mt-0.5 flex justify-between text-[10px] text-slate-400">
+        <span>N</span>
+        <span>P₂O₅</span>
+        <span>K₂O</span>
+      </div>
+    </div>
+  )
+}
+
+/* ------------------------------------------------------------ Economics */
+
+function EconomicsSection({ practice, doses }) {
+  const [data, setData] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+
+  useEffect(() => {
+    const currentBags = {
+      urea_bags: practice.urea_bags === '' ? 0 : Number(practice.urea_bags),
+      dap_bags: practice.dap_bags === '' ? 0 : Number(practice.dap_bags),
+      mop_bags: practice.mop_bags === '' ? 0 : Number(practice.mop_bags),
+    }
+    const recDose = (key) => {
+      const d = doses.find((x) => x.product_key === key)
+      return d ? d.bags : 0
+    }
+    const recommendedBags = {
+      urea_bags: recDose('urea'),
+      dap_bags: recDose('dap'),
+      mop_bags: recDose('mop'),
+    }
+
+    setLoading(true)
+    postEconomics({ current: currentBags, recommended: recommendedBags })
+      .then((res) => { setData(res); setLoading(false) })
+      .catch((err) => { setError(err.message); setLoading(false) })
+  }, [practice, doses])
+
+  if (loading) return null
+  if (error) {
+    return (
+      <Banner tone="warning" title="Economics data unavailable">
+        {error}
+      </Banner>
+    )
+  }
+  if (!data) return null
+
+  const savingsPositive = data.savings > 0
+  const savingsZero = data.savings === 0
+
+  return (
+    <Card title="Economics">
+      <div className="grid grid-cols-3 gap-2 text-center">
+        <div className="rounded-lg bg-slate-50 p-3">
+          <p className="text-xs font-medium text-slate-500">Current cost</p>
+          <p className="text-lg font-bold tabular-nums text-slate-800">₹{data.current_cost.toLocaleString('en-IN')}</p>
+        </div>
+        <div className="rounded-lg bg-slate-50 p-3">
+          <p className="text-xs font-medium text-slate-500">Recommended cost</p>
+          <p className="text-lg font-bold tabular-nums text-slate-800">₹{data.recommended_cost.toLocaleString('en-IN')}</p>
+        </div>
+        <div className={`rounded-lg p-3 ${savingsPositive ? 'bg-green-50' : savingsZero ? 'bg-slate-50' : 'bg-amber-50'}`}>
+          <p className="text-xs font-medium text-slate-500">
+            {savingsPositive ? 'You save' : savingsZero ? 'Same cost' : 'Additional cost'}
+          </p>
+          <p className={`text-lg font-bold tabular-nums ${savingsPositive ? 'text-green-700' : savingsZero ? 'text-slate-700' : 'text-amber-700'}`}>
+            ₹{Math.abs(data.savings).toLocaleString('en-IN')}
+          </p>
+        </div>
+      </div>
+
+      {data.assumptions.length > 0 ? (
+        <div className="mt-3 rounded border border-slate-200 bg-slate-50 p-2">
+          <p className="text-xs font-medium text-slate-500">Price assumptions</p>
+          {data.assumptions.map((a, i) => (
+            <p key={i} className="mt-1 text-xs text-slate-600">{a}</p>
+          ))}
+        </div>
+      ) : null}
+
+      <p className="mt-2 text-xs text-slate-500">
+        Input cost comparison only. No yield gain is assumed or fabricated.
+      </p>
+    </Card>
+  )
+}
+
+/* ------------------------------------------------------------ Schemes */
+
+function SchemesSection({ session }) {
+  const [data, setData] = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const profile = {
+      is_landholding: true,
+      state: session.plot.state,
+      crop: session.plot.crop,
+    }
+    setLoading(true)
+    postSchemesMatch(profile)
+      .then((res) => { setData(res); setLoading(false) })
+      .catch(() => setLoading(false))
+  }, [session.plot.state, session.plot.crop])
+
+  if (loading || !data) return null
+
+  const matched = data.schemes.filter((s) => s.eligibility_met)
+  if (matched.length === 0) return null
+
+  return (
+    <Card title="Government schemes you may be eligible for">
+      <ul className="divide-y divide-slate-100">
+        {matched.map((s) => (
+          <li key={s.id} className="py-3">
+            <p className="font-medium text-slate-900">{s.name}</p>
+            <p className="mt-1 text-sm text-slate-700">{s.description}</p>
+            <p className="mt-1 text-xs text-slate-500">{s.reason}</p>
+            <a
+              className="mt-1 block text-xs font-medium text-green-700 underline"
+              href={s.source_url}
+              target="_blank"
+              rel="noreferrer"
+            >
+              {s.source} →
+            </a>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-3 text-xs text-slate-500 italic">{data.disclaimer}</p>
+    </Card>
   )
 }

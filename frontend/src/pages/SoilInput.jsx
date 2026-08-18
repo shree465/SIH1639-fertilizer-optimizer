@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import {
@@ -12,8 +12,25 @@ import {
   TextInput,
 } from '../components/ui'
 import { useSession } from '../state/sessionStore'
+import { getSoilLookup } from '../api/client'
+import { useSpeechRecognition } from '../lib/useVoice'
 
 const GRADES = ['', 'low', 'medium', 'high']
+
+function getCardAgeInfo(issuedDateStr) {
+  if (!issuedDateStr) return null
+  const today = new Date('2026-08-16')
+  const issued = new Date(issuedDateStr)
+  const diffTime = today - issued
+  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
+  const diffYears = (diffDays / 365).toFixed(1)
+  
+  return {
+    days: diffDays,
+    years: diffYears,
+    stale: diffDays > 730, // 2 years
+  }
+}
 
 /**
  * Soil step.
@@ -33,6 +50,54 @@ export default function SoilInput() {
   const { session, updateSection } = useSession()
   const navigate = useNavigate()
   const [errors, setErrors] = useState({})
+
+  // SHC Lookup local state
+  const [shcId, setShcId] = useState('')
+  const [shcInfo, setShcInfo] = useState(null)
+  const [lookupLoading, setLookupLoading] = useState(false)
+  const [lookupError, setLookupError] = useState(null)
+
+  // Voice recognition hook
+  const {
+    transcript,
+    listening,
+    start: startListening,
+    stop: stopListening,
+    supported: sttSupported,
+  } = useSpeechRecognition('hi-IN')
+
+  useEffect(() => {
+    if (transcript) {
+      setShcId(transcript)
+    }
+  }, [transcript])
+
+  const handleShcLookup = async () => {
+    if (!shcId.trim()) return
+    setLookupLoading(true)
+    setLookupError(null)
+    setShcInfo(null)
+    try {
+      const data = await getSoilLookup(shcId.trim())
+      setShcInfo(data)
+      
+      // Update session values
+      updateSection('soil', {
+        n: String(data.results.available_n_kg_per_ha),
+        p: String(data.results.available_p_kg_per_ha),
+        k: String(data.results.available_k_kg_per_ha),
+        ph: String(data.results.ph),
+        organicCarbon: String(data.results.organic_carbon_percent),
+        nGrade: data.nutrient_grades?.n || '',
+        pGrade: data.nutrient_grades?.p || '',
+        kGrade: data.nutrient_grades?.k || '',
+      })
+    } catch (err) {
+      setLookupError(err.message || 'Soil Health Card not found.')
+    } finally {
+      setLookupLoading(false)
+    }
+  }
 
   const { soil, request } = session
   const isStcr = request.mode === 'stcr'
@@ -111,6 +176,67 @@ export default function SoilInput() {
                 <option value="manual">Entered manually / private lab</option>
               </Select>
             </Field>
+
+            {soil.source === 'shc' ? (
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-3">
+                <Field
+                  label="Soil Health Card ID"
+                  hint="Try MH-PN-2024-001234 or MH-PN-2024-005678 (simulated demo cards)."
+                  error={lookupError}
+                >
+                  <div className="flex gap-2">
+                    <TextInput
+                      value={shcId}
+                      onChange={(e) => setShcId(e.target.value)}
+                      placeholder="e.g. MH-PN-2024-001234"
+                    />
+                    {sttSupported ? (
+                      <button
+                        type="button"
+                        onClick={listening ? stopListening : startListening}
+                        className={`px-3 py-2 border rounded-lg text-sm shrink-0 transition ${
+                          listening
+                            ? 'bg-red-100 border-red-300 text-red-700 animate-pulse'
+                            : 'bg-slate-100 border-slate-300 text-slate-700 hover:bg-slate-200'
+                        }`}
+                        title="Speak card ID in Hindi"
+                      >
+                        {listening ? '🛑' : '🎤'}
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={handleShcLookup}
+                      disabled={lookupLoading || !shcId.trim()}
+                      className="px-4 py-2 bg-green-700 hover:bg-green-800 disabled:bg-slate-300 text-white font-semibold rounded-lg text-sm shrink-0 transition"
+                    >
+                      {lookupLoading ? '...' : 'Search'}
+                    </button>
+                  </div>
+                </Field>
+
+                {shcInfo ? (
+                  <div className="text-xs text-slate-700 space-y-1 border-t border-slate-200 pt-2">
+                    <p className="font-semibold text-slate-900 uppercase">Simulated Demo Card Loaded</p>
+                    <p>Card ID: <span className="font-mono">{shcInfo.card_id}</span></p>
+                    <p>Issued Date: {shcInfo.issued_date}</p>
+                    {(() => {
+                      const age = getCardAgeInfo(shcInfo.issued_date)
+                      if (!age) return null
+                      return (
+                        <p className={age.stale ? 'text-amber-700 font-medium' : 'text-slate-600'}>
+                          Card Age: {age.days} days (~{age.years} years)
+                          {age.stale ? ' (Stale/expired - renewal recommended every 2 years)' : ''}
+                        </p>
+                      )
+                    })()}
+                    <p className="text-[10px] text-slate-500 italic mt-1">
+                      {shcInfo.disclaimer}
+                    </p>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
 
             <Field
               label="Available nitrogen (N), kg/ha"

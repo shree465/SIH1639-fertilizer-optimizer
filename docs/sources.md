@@ -409,3 +409,34 @@ Recorded so the search is not silently repeated.
 | S3 "Rahuri, Upland paddy" block | Out of scope (Rabi, upland) and ready reckoner disagrees with its own equations by ±1. |
 | Web search snippets asserting "50% basal, 25% tillering, 25% panicle initiation" | Traced only to journal articles and aggregator sites, not to a Maharashtra Package of Practices. Not authoritative for this project. |
 | Rice STCR equations for other states (e.g. var. Rajeshwari) | Wrong state; STCR equations are calibrated per soil and centre and are not transferable. |
+
+---
+
+## Phase 3 Sourced Citations & Technology Path
+
+### S4 — Fertilizer Maximum Retail Prices (MRP)
+- **Urea MRP (₹242 per 45 kg bag):** Statutorily fixed by the Department of Fertilizers, Government of India.
+  - Source: Department of Fertilizers Urea Pricing Policy (https://www.fert.nic.in/urea-pricing-policy-section)
+  - Access Date: 2026-08-16
+- **DAP MRP (₹1,350 per 50 kg bag):** Maintain stabilised price through government subsidy.
+  - Source: Department of Fertilizers Subsidy Notifications (https://www.fert.nic.in/)
+  - Access Date: 2026-08-16
+- **MOP MRP (₹1,700 per 50 kg bag - NBS Mid-range Assumption):** Potash is decontrolled and subsidised under the Nutrient Based Subsidy (NBS) scheme. Actual prices vary (₹900 - ₹2,200). We assume ₹1,700 as a representative value.
+  - Source: NBS scheme notifications (https://www.fert.nic.in/)
+
+### S5 — Leaf Colour Chart (LCC)
+- **Bands and nitrogen rules:** The critical value is 4 for transplanted paddy. Band < 4 recommends nitrogen top-dressing.
+  - Source: IRRI (International Rice Research Institute) Leaf Color Chart Guidelines (http://www.irri.org/resources/publications/leaf-color-chart)
+  - Access Date: 2026-08-16
+
+### S6 — Government Subsidy Schemes
+- **PM-KISAN eligibility:** Direct income support of ₹6,000/year for landholding farmer families.
+  - Source: PM-KISAN Portal, Department of Agriculture & Farmers Welfare (https://pmkisan.gov.in/)
+- **Soil Health Card scheme:** Free soil testing every 2 years.
+  - Source: SHC Portal, Department of Agriculture and Farmers Welfare (https://soilhealth.dac.gov.in/)
+- **PMFBY eligibility:** Crop insurance at 2% premium for Kharif crops.
+  - Source: PMFBY Portal, Department of Agriculture & Farmers Welfare (https://pmfby.gov.in/)
+
+### S7 — Voice Interface Technology Path
+- **Speech-to-Text & Text-to-Speech:** Native browser Web Speech API is used as a demonstration-only prototype. It does not provide universal browser coverage or local dialect support.
+- **Production Path:** For production applications in Indian rural areas, integration with **Bhashini** (https://bhashini.gov.in/) — the National Language Translation Mission's AI translation system — is the recommended architecture. Bhashini provides robust Speech-to-Text and Text-to-Speech in 22 scheduled Indian languages, including regional accents.
