@@ -1,0 +1,35 @@
+{
+  "_comment": "Fertilizer Maximum Retail Prices (MRP) for the demo economics layer.",
+  "_disclaimer": "These are representative prices for demonstration purposes. Actual prices vary by region and season.",
+  "currency": "INR",
+  "prices": {
+    "urea": {
+      "product_key": "urea",
+      "mrp_per_bag": 242,
+      "bag_size_kg": 45,
+      "source": "Department of Fertilizers, Government of India — Urea Pricing Policy",
+      "source_url": "https://www.fert.nic.in/urea-pricing-policy-section",
+      "note": "Statutorily notified MRP, exclusive of neem coating charges and applicable taxes.",
+      "price_basis": "statutory"
+    },
+    "dap": {
+      "product_key": "dap",
+      "mrp_per_bag": 1350,
+      "bag_size_kg": 50,
+      "source": "Department of Fertilizers, Government of India — DAP price stabilisation",
+      "source_url": "https://www.fert.nic.in/",
+      "note": "Government-stabilised MRP maintained through special subsidy packages to insulate farmers from global price volatility.",
+      "price_basis": "government_stabilised"
+    },
+    "mop": {
+      "product_key": "mop",
+      "mrp_per_bag": 1700,
+      "bag_size_kg": 50,
+      "source": "Nutrient Based Subsidy (NBS) scheme — representative mid-range market price",
+      "source_url": "https://www.fert.nic.in/",
+      "note": "MOP has no single statutory MRP. Under the NBS scheme, retail prices vary by manufacturer and region (approx. ₹900–₹2,200 per 50 kg bag). ₹1,700 is used as a representative mid-range value. THIS IS AN ASSUMPTION — verify against local dealer price for actual advisory.",
+      "price_basis": "assumption_nbs_midrange"
+    }
+  },
+  "last_verified": "2026-08-16"
+}
