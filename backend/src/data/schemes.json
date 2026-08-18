@@ -1,0 +1,49 @@
+{
+  "_comment": "Government schemes for which eligibility can be checked against a farmer profile. Each rule is sourced and auditable.",
+  "_disclaimer": "Eligibility rules are simplified for this demo. Actual eligibility involves additional documentation and verification by government agencies. Always verify with the official portal.",
+  "schemes": [
+    {
+      "id": "pm-kisan",
+      "name": "Pradhan Mantri Kisan Samman Nidhi (PM-KISAN)",
+      "description": "Direct income support of ₹6,000 per year to landholding farmer families, paid in three instalments of ₹2,000.",
+      "eligibility": {
+        "is_landholding": true,
+        "states": "all",
+        "crops": "all"
+      },
+      "exclusions": "Institutional landholders; constitutional post holders; serving/retired central/state government officers (except MTS/Group D); professionals (doctors, engineers, lawyers); income tax payers.",
+      "how_to_apply": "Register at pmkisan.gov.in or visit a Common Service Centre.",
+      "source": "PM-KISAN Official Portal, Ministry of Agriculture & Farmers Welfare",
+      "source_url": "https://pmkisan.gov.in/"
+    },
+    {
+      "id": "soil-health-card",
+      "name": "Soil Health Card Scheme",
+      "description": "Free soil testing and a printed Soil Health Card with nutrient status and fertilizer recommendations, issued every 2 years.",
+      "eligibility": {
+        "is_landholding": true,
+        "states": "all",
+        "crops": "all"
+      },
+      "exclusions": "None — open to all farmers including tenants and sharecroppers.",
+      "how_to_apply": "Register at soilhealth.dac.gov.in or contact the nearest Krishi Vigyan Kendra.",
+      "source": "Soil Health Card Portal, Department of Agriculture and Farmers Welfare",
+      "source_url": "https://soilhealth.dac.gov.in/"
+    },
+    {
+      "id": "pmfby",
+      "name": "Pradhan Mantri Fasal Bima Yojana (PMFBY)",
+      "description": "Crop insurance against losses from natural calamities, pests, and diseases. Farmer premium is capped at 2% for kharif crops.",
+      "eligibility": {
+        "is_landholding": true,
+        "states": "all",
+        "crops": ["kharif"],
+        "season_match": true
+      },
+      "exclusions": "Voluntary for non-loanee farmers. Some states have opted out of certain seasons.",
+      "how_to_apply": "Apply through the bank where the crop loan is availed, or online at pmfby.gov.in.",
+      "source": "PMFBY Official Portal, Ministry of Agriculture & Farmers Welfare",
+      "source_url": "https://pmfby.gov.in/"
+    }
+  ]
+}
